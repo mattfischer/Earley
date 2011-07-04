@@ -10,7 +10,7 @@ struct Allocator {
 	struct Pool *completed_pool;
 };
 
-static void fill_item(struct Item *item, struct Rule *rule, int scanned, struct Set *start)
+static void fill_item(struct EarleyItem *item, struct Rule *rule, int scanned, struct EarleySet *start)
 {
 	item->rule = rule;
 	item->scanned = scanned;
@@ -18,31 +18,31 @@ static void fill_item(struct Item *item, struct Rule *rule, int scanned, struct 
 	item->next = NULL;
 }
 
-static struct Item *allocate_item(struct Item *copy, struct Pool *pool)
+static struct EarleyItem *allocate_item(struct EarleyItem *copy, struct Pool *pool)
 {
-	struct Item *new_item;
+	struct EarleyItem *new_item;
 
-	new_item = pool_alloc(pool, sizeof(struct Item));
+	new_item = pool_alloc(pool, sizeof(struct EarleyItem));
 	fill_item(new_item, copy->rule, copy->scanned, copy->start);
 
 	return new_item;
 }
 
-static void add_tail(struct Item *tail, struct Item *new_item)
+static void add_tail(struct EarleyItem *tail, struct EarleyItem *new_item)
 {
 	new_item->next = tail->next;
 	tail->next = new_item;
 }
 
-static void add_head(struct Item **head, struct Item *new_item)
+static void add_head(struct EarleyItem **head, struct EarleyItem *new_item)
 {
 	new_item->next = *head;
 	*head = new_item;
 }
 
-static struct Item *find_item(struct Item *head, struct Item *item)
+static struct EarleyItem *find_item(struct EarleyItem *head, struct EarleyItem *item)
 {
-	struct Item *cursor;
+	struct EarleyItem *cursor;
 
 	for(cursor = head; cursor != NULL; cursor = cursor->next) {
 		if(cursor->rule == item->rule && cursor->scanned == item->scanned && cursor->start == item->start) {
@@ -53,11 +53,11 @@ static struct Item *find_item(struct Item *head, struct Item *item)
 	return NULL;
 }
 
-static void predict(struct Set *set, struct Rule *grammar, struct Allocator *allocator)
+static void predict(struct EarleySet *set, struct Rule *grammar, struct Allocator *allocator)
 {
-	struct Item *cursor;
-	struct Item *new_item;
-	struct Item potential_item;
+	struct EarleyItem *cursor;
+	struct EarleyItem *new_item;
+	struct EarleyItem potential_item;
 	char token;
 	int i;
 
@@ -78,11 +78,11 @@ static void predict(struct Set *set, struct Rule *grammar, struct Allocator *all
 	}
 }
 
-static void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, char token, struct Allocator *allocator)
+static void scan(struct EarleySet *set, struct EarleySet *next_set, struct EarleyItem *completed_tail, char token, struct Allocator *allocator)
 {
-	struct Item *cursor;
-	struct Item *new_item;
-	struct Item potential_item;
+	struct EarleyItem *cursor;
+	struct EarleyItem *new_item;
+	struct EarleyItem potential_item;
 
 	for(cursor = set->active; cursor != NULL; cursor = cursor->next) {
 		// Input = c
@@ -119,9 +119,9 @@ static void scan(struct Set *set, struct Set *next_set, struct Item *completed_t
 	}
 }
 
-static void complete(struct Set *set, struct Allocator *allocator)
+static void complete(struct EarleySet *set, struct Allocator *allocator)
 {
-	struct Item *cursor;
+	struct EarleyItem *cursor;
 
 	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
 		// For each item X -> y. (n) in set.completed, scan sets[n].active with
@@ -130,10 +130,10 @@ static void complete(struct Set *set, struct Allocator *allocator)
 	}
 }
 				
-static struct Tree *create_tree(struct Set sets[], int idx, char token, int *start_idx, struct Pool *pool)
+static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, int *start_idx, struct Pool *pool)
 {
-	struct Set *set;
-	struct Item *cursor;
+	struct EarleySet *set;
+	struct EarleyItem *cursor;
 	struct Rule *rule;
 	struct Tree *tree;
 	int i;
@@ -172,12 +172,12 @@ static struct Tree *create_tree(struct Set sets[], int idx, char token, int *sta
 	return tree;
 }
 
-struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_rule, struct Pool *active_pool, struct Pool *completed_pool)
+struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct Rule *start_rule, struct Pool *active_pool, struct Pool *completed_pool)
 {
 	int i;
-	struct Item start_item;
+	struct EarleyItem start_item;
 	struct Tree *tree;
-	struct Set *sets;
+	struct EarleySet *sets;
 	struct Allocator allocator;
 	int len;
 
@@ -185,8 +185,8 @@ struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_ru
 	allocator.completed_pool = completed_pool;
 
 	len = strlen(input);
-	sets = pool_alloc(completed_pool, sizeof(struct Set) * (len + 1));
-	memset(sets, 0, sizeof(struct Set) * (len + 1));
+	sets = pool_alloc(completed_pool, sizeof(struct EarleySet) * (len + 1));
+	memset(sets, 0, sizeof(struct EarleySet) * (len + 1));
 
 	fill_item(&start_item, start_rule, 0, &sets[0]);
 	sets[0].active = allocate_item(&start_item, active_pool);
@@ -200,7 +200,7 @@ struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_ru
 	return sets;
 }
 
-struct Tree *parse_tree(struct Set sets[], int num_sets, struct Rule *start_rule, struct Pool *pool)
+struct Tree *earley_tree(struct EarleySet sets[], int num_sets, struct Rule *start_rule, struct Pool *pool)
 {
 	return create_tree(sets, num_sets - 1, start_rule->lhs, NULL, pool);
 }

@@ -17,19 +17,21 @@ static void print_dot(const char *str, int pos)
 	}
 }
 
-void print_item(struct Item *item, struct Set sets[])
+void print_item(struct EarleyItem *item, struct EarleySet sets[])
 {
 	printf("%c: ", item->rule->lhs);
 	print_dot(item->rule->rhs, item->scanned);
 	printf(" [%i]\n", item->start - sets);
 }
 
-void print_sets(const char *input, struct Rule *grammar, struct Set sets[])
+void print_sets(const char *input, struct EarleySet sets[])
 {
 	int i;
-	struct Item *cursor;
+	int len;
+	struct EarleyItem *cursor;
 
-	for(i=0; i<strlen(input) + 1; i++) {
+	len = strlen(input);
+	for(i=0; i<len + 1; i++) {
 		printf("[", i);
 		print_dot(input, i);
 		printf("]:\n");
