@@ -7,7 +7,9 @@ struct Pool {
 	int size;
 };
 
-void *allocate(int size, struct Pool *pool);
-void free_pool(struct Pool *pool);
+void pool_create(struct Pool *pool, int size);
+void pool_free(struct Pool *pool);
+
+void *pool_alloc(struct Pool *pool, int size);
 
 #endif

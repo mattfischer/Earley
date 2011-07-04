@@ -1,16 +1,14 @@
+#include "earley.h"
+
 #include <stdlib.h>
 
-#include "earley.h"
 #include "pool.h"
 #include "print.h"
 
-#define KEEP_SIZE 1 * 1024
-char keep_memory[KEEP_SIZE];
-struct Pool keep_pool = { keep_memory, 0, KEEP_SIZE };
-
-#define TEMP_SIZE 5 * 1024
-char temp_memory[KEEP_SIZE];
-struct Pool temp_pool = { temp_memory, 0, TEMP_SIZE };
+struct Allocator {
+	struct Pool *active_pool;
+	struct Pool *completed_pool;
+};
 
 static void fill_item(struct Item *item, struct Rule *rule, int scanned, struct Set *start)
 {
@@ -24,7 +22,7 @@ static struct Item *allocate_item(struct Item *copy, struct Pool *pool)
 {
 	struct Item *new_item;
 
-	new_item = allocate(sizeof(struct Item), pool);
+	new_item = pool_alloc(pool, sizeof(struct Item));
 	fill_item(new_item, copy->rule, copy->scanned, copy->start);
 
 	return new_item;
@@ -55,7 +53,7 @@ static struct Item *find_item(struct Item *head, struct Item *item)
 	return NULL;
 }
 
-static void predict(struct Set *set, struct Rule *grammar)
+static void predict(struct Set *set, struct Rule *grammar, struct Allocator *allocator)
 {
 	struct Item *cursor;
 	struct Item *new_item;
@@ -73,14 +71,14 @@ static void predict(struct Set *set, struct Rule *grammar)
 					continue;
 				}
 
-				new_item = allocate_item(&potential_item, &temp_pool);
+				new_item = allocate_item(&potential_item, allocator->active_pool);
 				add_tail(cursor, new_item);
 			}
 		}
 	}
 }
 
-static void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, struct Rule *grammar, char token)
+static void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, struct Rule *grammar, char token, struct Allocator *allocator)
 {
 	struct Item *cursor;
 	struct Item *new_item;
@@ -99,7 +97,7 @@ static void scan(struct Set *set, struct Set *next_set, struct Item *completed_t
 					continue;
 				}
 
-				new_item = allocate_item(&potential_item, &keep_pool);
+				new_item = allocate_item(&potential_item, allocator->completed_pool);
 
 				if(completed_tail != NULL) {
 					add_tail(completed_tail, new_item);
@@ -114,25 +112,25 @@ static void scan(struct Set *set, struct Set *next_set, struct Item *completed_t
 					continue;
 				}
 
-				new_item = allocate_item(&potential_item, &temp_pool);
+				new_item = allocate_item(&potential_item, allocator->active_pool);
 				add_head(&next_set->active, new_item);
 			}
 		}
 	}
 }
 
-static void complete(struct Set *set, struct Rule *grammar)
+static void complete(struct Set *set, struct Rule *grammar, struct Allocator *allocator)
 {
 	struct Item *cursor;
 
 	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
 		// For each item X -> y. (n) in set.completed, scan sets[n].active with
 		// token X, placing the results into set
-		scan(cursor->start, set, cursor, grammar, cursor->rule->lhs);
+		scan(cursor->start, set, cursor, grammar, cursor->rule->lhs, allocator);
 	}
 }
 				
-static struct Tree *create_tree(struct Set sets[], int idx, char token, int *start_idx)
+static struct Tree *create_tree(struct Set sets[], int idx, char token, int *start_idx, struct Pool *pool)
 {
 	struct Set *set;
 	struct Item *cursor;
@@ -158,11 +156,11 @@ static struct Tree *create_tree(struct Set sets[], int idx, char token, int *sta
 
 	rule = cursor->rule;
 	current_idx = idx;
-	tree = allocate(sizeof(struct Tree), &keep_pool);
+	tree = pool_alloc(pool, sizeof(struct Tree));
 	tree->rule = rule;
-	tree->children = allocate(sizeof(struct Three*) * strlen(rule->rhs), &keep_pool);
+	tree->children = pool_alloc(pool, sizeof(struct Three*) * strlen(rule->rhs));
 	for(i=strlen(rule->rhs) - 1; i>=0; i--) {
-		tree->children[i] = create_tree(sets, current_idx, rule->rhs[i], &current_idx);
+		tree->children[i] = create_tree(sets, current_idx, rule->rhs[i], &current_idx, pool);
 	}
 
 	if(start_idx != NULL) {
@@ -172,32 +170,34 @@ static struct Tree *create_tree(struct Set sets[], int idx, char token, int *sta
 	return tree;
 }
 
-struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_rule)
+struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_rule, struct Pool *active_pool, struct Pool *completed_pool)
 {
 	int i;
 	struct Item start_item;
 	struct Tree *tree;
 	struct Set *sets;
-	
-	sets = allocate(sizeof(struct Set) * (strlen(input) + 1), &keep_pool);
+	struct Allocator allocator;
+
+	allocator.active_pool = active_pool;
+	allocator.completed_pool = completed_pool;
+
+	sets = pool_alloc(completed_pool, sizeof(struct Set) * (strlen(input) + 1));
 	memset(sets, 0, sizeof(struct Set) * (strlen(input) + 1));
 
 	fill_item(&start_item, start_rule, 0, &sets[0]);
-	sets[0].active = allocate_item(&start_item, &temp_pool);
+	sets[0].active = allocate_item(&start_item, active_pool);
 
 	for(i=0; i<strlen(input); i++) {
-		predict(&sets[i], grammar);
-		scan(&sets[i], &sets[i+1], NULL, grammar, input[i]);
-		complete(&sets[i+1], grammar);
+		predict(&sets[i], grammar, &allocator);
+		scan(&sets[i], &sets[i+1], NULL, grammar, input[i], &allocator);
+		complete(&sets[i+1], grammar, &allocator);
 	}
-
-	free_pool(&temp_pool);
 
 	return sets;
 }
 
-struct Tree *parse_tree(struct Set sets[], int num_sets, struct Rule *start_rule)
+struct Tree *parse_tree(struct Set sets[], int num_sets, struct Rule *start_rule, struct Pool *pool)
 {
-	return create_tree(sets, num_sets - 1, start_rule->lhs, NULL);
+	return create_tree(sets, num_sets - 1, start_rule->lhs, NULL, pool);
 }
 

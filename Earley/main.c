@@ -1,10 +1,15 @@
 #include "earley.h"
 #include "print.h"
 
+#define ACTIVE_SIZE 5 * 1024
+#define COMPLETED_SIZE 1 * 1024
+#define TREE_SIZE 1 * 1024
+
 int main(int argc, char *argv[])
 {
 	struct Set *sets;
 	struct Tree *tree;
+	struct Pool active_pool, completed_pool, tree_pool;
 	char *input = "n*(n+n)";
 	struct Rule grammar[] = {
 		{ 'S', "E" },
@@ -17,11 +22,17 @@ int main(int argc, char *argv[])
 		{ 0, 0 }
 	};
 
-	sets = parse(input, grammar, &grammar[0]);
+	pool_create(&active_pool, ACTIVE_SIZE);
+	pool_create(&completed_pool, COMPLETED_SIZE);
+
+	sets = parse(input, grammar, &grammar[0], &active_pool, &completed_pool);
 	printf("Earley Sets:\n");
 	print_sets(input, grammar, sets);
 
-	tree = parse_tree(sets, strlen(input) + 1, &grammar[0]);
+	pool_free(&active_pool);
+	pool_create(&tree_pool, TREE_SIZE);
+
+	tree = parse_tree(sets, strlen(input) + 1, &grammar[0], &tree_pool);
 	printf("Parse Tree:\n");
 	print_tree(tree, 2);
 }
