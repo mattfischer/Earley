@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
 	struct EarleySet *sets;
 	struct Tree *tree;
 	struct Pool active_pool, completed_pool, tree_pool;
-	char *input = "n*(n+n)";
+	/*char *input = "n*(n+n)";
 	struct Rule grammar[] = {
 		{ 'S', "E" },
 		{ 'E', "T" },
@@ -19,6 +19,14 @@ int main(int argc, char *argv[])
 		{ 'T', "T*F" },
 		{ 'F', "n" },
 		{ 'F', "(E)" },
+		{ 0, 0 }
+	};*/
+	char *input = "b";
+	struct Rule grammar[] = {
+		{ 'S', "Ab" },
+		{ 'A', "a" },
+		{ 'A', "B" },
+		{ 'B', "" },
 		{ 0, 0 }
 	};
 	struct Rule *start_rule = &grammar[0];

@@ -10,6 +10,32 @@ struct Allocator {
 	struct Pool *completed_pool;
 };
 
+void token_set_init(struct TokenSet *set, int start, int stop, struct Pool *pool)
+{
+	int size = (stop - start + 7) / 8;
+
+	set->memory = pool_alloc(pool, size);
+	memset(set->memory, 0, size);
+	set->start = start;
+	set->stop = stop;
+}
+
+void token_set_add(struct TokenSet *set, char token)
+{
+	int idx = (token - set->start) / 8;
+	int bit = (token - set->start) % 8;
+
+	set->memory[idx] |= (1 << bit);
+}
+
+int token_set_test(struct TokenSet *set, char token)
+{
+	int idx = (token - set->start) / 8;
+	int bit = (token - set->start) % 8;
+
+	return set->memory[idx] & (1 << bit);
+}
+
 static void fill_item(struct EarleyItem *item, struct Rule *rule, int scanned, struct EarleySet *start)
 {
 	item->rule = rule;
@@ -53,7 +79,7 @@ static struct EarleyItem *find_item(struct EarleyItem *head, struct EarleyItem *
 	return NULL;
 }
 
-static void predict(struct EarleySet *set, struct Rule *grammar, struct Allocator *allocator)
+static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet *nullable, struct Allocator *allocator)
 {
 	struct EarleyItem *cursor;
 	struct EarleyItem *new_item;
@@ -62,8 +88,24 @@ static void predict(struct EarleySet *set, struct Rule *grammar, struct Allocato
 	int i;
 
 	for(cursor = set->active; cursor != NULL; cursor = cursor->next) {
-		// For each item A -> x.By in set.active, add all grammar rules B -> .X (idx) to set.active
 		token = cursor->rule->rhs[cursor->scanned];
+
+		// For each item A -> x.By (n) in set.active where B is nullable, add A -> xB.y (n) to set.active
+		if(token_set_test(nullable, token) != 0) {
+			fill_item(&potential_item, cursor->rule, cursor->scanned + 1, cursor->start);
+
+			if(find_item(set->active, &potential_item) == NULL) {
+				if(strlen(potential_item.rule->rhs) == potential_item.scanned) {
+					new_item = allocate_item(&potential_item, allocator->completed_pool);
+					add_head(&set->completed, new_item);
+				} else {
+					new_item = allocate_item(&potential_item, allocator->active_pool);
+					add_tail(cursor, new_item);
+				}
+			}
+		}
+
+		// For each item A -> x.By in set.active, add all grammar rules B -> .X (idx) to set.active
 		for(i = 0; grammar[i].lhs != 0; i++) {
 			if(grammar[i].lhs == token) {
 				fill_item(&potential_item, &grammar[i], 0, set);
@@ -71,8 +113,13 @@ static void predict(struct EarleySet *set, struct Rule *grammar, struct Allocato
 					continue;
 				}
 
-				new_item = allocate_item(&potential_item, allocator->active_pool);
-				add_tail(cursor, new_item);
+				if(strlen(potential_item.rule->rhs) == 0) {
+					new_item = allocate_item(&potential_item, allocator->completed_pool);
+					add_head(&set->completed, new_item);
+				} else {
+					new_item = allocate_item(&potential_item, allocator->active_pool);
+					add_tail(cursor, new_item);
+				}
 			}
 		}
 	}
@@ -172,6 +219,31 @@ static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, in
 	return tree;
 }
 
+static void compute_nullable(struct Rule *grammar, struct TokenSet *nullable)
+{
+	int i;
+	int j;
+	int len;
+	int is_nullable;
+	struct Rule *rule;
+
+	for(i=0; grammar[i].lhs != 0; i++) {
+		rule = &grammar[i];
+		len = strlen(rule->rhs);
+		is_nullable = 1;
+		for(j=0; j<len; j++) {
+			if(token_set_test(nullable, rule->rhs[j]) != 0) {
+				is_nullable = 0;
+				break;
+			}
+		}
+
+		if(is_nullable) {
+			token_set_add(nullable, rule->lhs);
+		}
+	}
+}
+
 struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct Rule *start_rule, struct Pool *active_pool, struct Pool *completed_pool)
 {
 	int i;
@@ -179,10 +251,14 @@ struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct R
 	struct Tree *tree;
 	struct EarleySet *sets;
 	struct Allocator allocator;
+	struct TokenSet nullable;
 	int len;
 
 	allocator.active_pool = active_pool;
 	allocator.completed_pool = completed_pool;
+
+	token_set_init(&nullable, 0, 127, active_pool);
+	compute_nullable(grammar, &nullable);
 
 	len = strlen(input);
 	sets = pool_alloc(completed_pool, sizeof(struct EarleySet) * (len + 1));
@@ -192,7 +268,7 @@ struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct R
 	sets[0].active = allocate_item(&start_item, active_pool);
 
 	for(i=0; i<len; i++) {
-		predict(&sets[i], grammar, &allocator);
+		predict(&sets[i], grammar, &nullable, &allocator);
 		scan(&sets[i], &sets[i+1], NULL, input[i], &allocator);
 		complete(&sets[i+1], &allocator);
 	}
