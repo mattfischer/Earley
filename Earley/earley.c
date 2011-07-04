@@ -172,7 +172,7 @@ static struct Tree *create_tree(struct Set sets[], int idx, char token, int *sta
 	return tree;
 }
 
-struct Tree *parse(const char *input, struct Rule *grammar)
+struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_rule)
 {
 	int i;
 	struct Item start_item;
@@ -182,7 +182,7 @@ struct Tree *parse(const char *input, struct Rule *grammar)
 	sets = allocate(sizeof(struct Set) * (strlen(input) + 1), &keep_pool);
 	memset(sets, 0, sizeof(struct Set) * (strlen(input) + 1));
 
-	fill_item(&start_item, &grammar[0], 0, &sets[0]);
+	fill_item(&start_item, start_rule, 0, &sets[0]);
 	sets[0].active = allocate_item(&start_item, &temp_pool);
 
 	for(i=0; i<strlen(input); i++) {
@@ -193,9 +193,11 @@ struct Tree *parse(const char *input, struct Rule *grammar)
 
 	free_pool(&temp_pool);
 
-	tree = create_tree(sets, strlen(input), grammar[0].lhs, NULL);
-
-	print_sets(input, grammar, sets);
-
-	return tree;
+	return sets;
 }
+
+struct Tree *parse_tree(struct Set sets[], int num_sets, struct Rule *start_rule)
+{
+	return create_tree(sets, num_sets - 1, start_rule->lhs, NULL);
+}
+

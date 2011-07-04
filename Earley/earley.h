@@ -25,6 +25,7 @@ struct Set {
 	struct Item *completed;
 };
 
-struct Tree *parse(const char *input, struct Rule *grammar);
+struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_rule);
+struct Tree *parse_tree(struct Set sets[], int num_sets, struct Rule *start_rule);
 
 #endif

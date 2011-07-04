@@ -3,7 +3,8 @@
 
 int main(int argc, char *argv[])
 {
-	struct TreeNode *tree;
+	struct Set *sets;
+	struct Tree *tree;
 	char *input = "n*(n+n)";
 	struct Rule grammar[] = {
 		{ 'S', "E" },
@@ -16,8 +17,11 @@ int main(int argc, char *argv[])
 		{ 0, 0 }
 	};
 
-	tree = parse(input, grammar);
+	sets = parse(input, grammar, &grammar[0]);
+	printf("Earley Sets:\n");
+	print_sets(input, grammar, sets);
 
+	tree = parse_tree(sets, strlen(input) + 1, &grammar[0]);
 	printf("Parse Tree:\n");
 	print_tree(tree, 2);
 }
