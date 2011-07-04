@@ -21,18 +21,19 @@ int main(int argc, char *argv[])
 		{ 'F', "(E)" },
 		{ 0, 0 }
 	};
+	struct Rule *start_rule = &grammar[0];
 
 	pool_create(&active_pool, ACTIVE_SIZE);
 	pool_create(&completed_pool, COMPLETED_SIZE);
 
-	sets = parse(input, grammar, &grammar[0], &active_pool, &completed_pool);
+	sets = parse(input, grammar, start_rule, &active_pool, &completed_pool);
 	printf("Earley Sets:\n");
 	print_sets(input, grammar, sets);
 
 	pool_free(&active_pool);
 	pool_create(&tree_pool, TREE_SIZE);
 
-	tree = parse_tree(sets, strlen(input) + 1, &grammar[0], &tree_pool);
+	tree = parse_tree(sets, strlen(input) + 1, start_rule, &tree_pool);
 	printf("Parse Tree:\n");
 	print_tree(tree, 2);
 }

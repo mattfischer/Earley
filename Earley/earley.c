@@ -78,7 +78,7 @@ static void predict(struct Set *set, struct Rule *grammar, struct Allocator *all
 	}
 }
 
-static void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, struct Rule *grammar, char token, struct Allocator *allocator)
+static void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, char token, struct Allocator *allocator)
 {
 	struct Item *cursor;
 	struct Item *new_item;
@@ -119,14 +119,14 @@ static void scan(struct Set *set, struct Set *next_set, struct Item *completed_t
 	}
 }
 
-static void complete(struct Set *set, struct Rule *grammar, struct Allocator *allocator)
+static void complete(struct Set *set, struct Allocator *allocator)
 {
 	struct Item *cursor;
 
 	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
 		// For each item X -> y. (n) in set.completed, scan sets[n].active with
 		// token X, placing the results into set
-		scan(cursor->start, set, cursor, grammar, cursor->rule->lhs, allocator);
+		scan(cursor->start, set, cursor, cursor->rule->lhs, allocator);
 	}
 }
 				
@@ -138,6 +138,7 @@ static struct Tree *create_tree(struct Set sets[], int idx, char token, int *sta
 	struct Tree *tree;
 	int i;
 	int current_idx;
+	int len;
 
 	set = &sets[idx];
 	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
@@ -155,11 +156,12 @@ static struct Tree *create_tree(struct Set sets[], int idx, char token, int *sta
 	}
 
 	rule = cursor->rule;
+	len = strlen(rule->rhs);
 	current_idx = idx;
 	tree = pool_alloc(pool, sizeof(struct Tree));
 	tree->rule = rule;
-	tree->children = pool_alloc(pool, sizeof(struct Three*) * strlen(rule->rhs));
-	for(i=strlen(rule->rhs) - 1; i>=0; i--) {
+	tree->children = pool_alloc(pool, sizeof(struct Tree*) * len);
+	for(i=len - 1; i>=0; i--) {
 		tree->children[i] = create_tree(sets, current_idx, rule->rhs[i], &current_idx, pool);
 	}
 
@@ -177,20 +179,22 @@ struct Set *parse(const char *input, struct Rule *grammar, struct Rule *start_ru
 	struct Tree *tree;
 	struct Set *sets;
 	struct Allocator allocator;
+	int len;
 
 	allocator.active_pool = active_pool;
 	allocator.completed_pool = completed_pool;
 
-	sets = pool_alloc(completed_pool, sizeof(struct Set) * (strlen(input) + 1));
-	memset(sets, 0, sizeof(struct Set) * (strlen(input) + 1));
+	len = strlen(input);
+	sets = pool_alloc(completed_pool, sizeof(struct Set) * (len + 1));
+	memset(sets, 0, sizeof(struct Set) * (len + 1));
 
 	fill_item(&start_item, start_rule, 0, &sets[0]);
 	sets[0].active = allocate_item(&start_item, active_pool);
 
-	for(i=0; i<strlen(input); i++) {
+	for(i=0; i<len; i++) {
 		predict(&sets[i], grammar, &allocator);
-		scan(&sets[i], &sets[i+1], NULL, grammar, input[i], &allocator);
-		complete(&sets[i+1], grammar, &allocator);
+		scan(&sets[i], &sets[i+1], NULL, input[i], &allocator);
+		complete(&sets[i+1], &allocator);
 	}
 
 	return sets;
