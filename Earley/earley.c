@@ -1,29 +1,8 @@
 #include <stdlib.h>
 
-struct Rule {
-	char lhs;
-	char *rhs;
-};
-
-struct Set;
-
-struct Item {
-	struct Item *next;
-	struct Rule *rule;
-	int scanned;
-	struct Set *start;
-};
-
-struct Set {
-	struct Item *active;
-	struct Item *completed;
-};
-
-struct Pool {
-	char *memory;
-	int start;
-	int size;
-};
+#include "earley.h"
+#include "pool.h"
+#include "print.h"
 
 #define KEEP_SIZE 1 * 1024
 char keep_memory[KEEP_SIZE];
@@ -33,19 +12,7 @@ struct Pool keep_pool = { keep_memory, 0, KEEP_SIZE };
 char temp_memory[KEEP_SIZE];
 struct Pool temp_pool = { temp_memory, 0, TEMP_SIZE };
 
-void *allocate(int size, struct Pool *pool)
-{
-	void *ret = pool->memory + pool->start;
-	pool->start += size;
-	
-	if(pool->start >= pool->size) {
-		printf("Error: Memory overflow\n");
-	}
-
-	return ret;
-}
-
-void fill_item(struct Item *item, struct Rule *rule, int scanned, struct Set *start)
+static void fill_item(struct Item *item, struct Rule *rule, int scanned, struct Set *start)
 {
 	item->rule = rule;
 	item->scanned = scanned;
@@ -53,7 +20,7 @@ void fill_item(struct Item *item, struct Rule *rule, int scanned, struct Set *st
 	item->next = NULL;
 }
 
-struct Item *allocate_item(struct Item *copy, struct Pool *pool)
+static struct Item *allocate_item(struct Item *copy, struct Pool *pool)
 {
 	struct Item *new_item;
 
@@ -63,19 +30,19 @@ struct Item *allocate_item(struct Item *copy, struct Pool *pool)
 	return new_item;
 }
 
-void add_tail(struct Item *tail, struct Item *new_item)
+static void add_tail(struct Item *tail, struct Item *new_item)
 {
 	new_item->next = tail->next;
 	tail->next = new_item;
 }
 
-void add_head(struct Item **head, struct Item *new_item)
+static void add_head(struct Item **head, struct Item *new_item)
 {
 	new_item->next = *head;
 	*head = new_item;
 }
 
-struct Item *find_item(struct Item *head, struct Item *item)
+static struct Item *find_item(struct Item *head, struct Item *item)
 {
 	struct Item *cursor;
 
@@ -88,7 +55,7 @@ struct Item *find_item(struct Item *head, struct Item *item)
 	return NULL;
 }
 
-void predict(struct Set *set, struct Rule *grammar)
+static void predict(struct Set *set, struct Rule *grammar)
 {
 	struct Item *cursor;
 	struct Item *new_item;
@@ -113,7 +80,7 @@ void predict(struct Set *set, struct Rule *grammar)
 	}
 }
 
-void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, struct Rule *grammar, char token)
+static void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, struct Rule *grammar, char token)
 {
 	struct Item *cursor;
 	struct Item *new_item;
@@ -154,7 +121,7 @@ void scan(struct Set *set, struct Set *next_set, struct Item *completed_tail, st
 	}
 }
 
-void complete(struct Set *set, struct Rule *grammar)
+static void complete(struct Set *set, struct Rule *grammar)
 {
 	struct Item *cursor;
 
@@ -165,10 +132,55 @@ void complete(struct Set *set, struct Rule *grammar)
 	}
 }
 				
-void parse(const char *input, struct Rule *grammar, struct Set *sets)
+static struct Tree *create_tree(struct Set sets[], int idx, char token, int *start_idx)
+{
+	struct Set *set;
+	struct Item *cursor;
+	struct Rule *rule;
+	struct Tree *tree;
+	int i;
+	int current_idx;
+
+	set = &sets[idx];
+	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
+		if(cursor->rule->lhs == token) {
+			break;
+		}
+	}
+
+	if(cursor == NULL) {
+		if(start_idx != NULL) {
+			*start_idx = idx - 1;
+		}
+
+		return NULL;
+	}
+
+	rule = cursor->rule;
+	current_idx = idx;
+	tree = allocate(sizeof(struct Tree), &keep_pool);
+	tree->rule = rule;
+	tree->children = allocate(sizeof(struct Three*) * strlen(rule->rhs), &keep_pool);
+	for(i=strlen(rule->rhs) - 1; i>=0; i--) {
+		tree->children[i] = create_tree(sets, current_idx, rule->rhs[i], &current_idx);
+	}
+
+	if(start_idx != NULL) {
+		*start_idx = current_idx;
+	}
+
+	return tree;
+}
+
+struct Tree *parse(const char *input, struct Rule *grammar)
 {
 	int i;
 	struct Item start_item;
+	struct Tree *tree;
+	struct Set *sets;
+	
+	sets = allocate(sizeof(struct Set) * (strlen(input) + 1), &keep_pool);
+	memset(sets, 0, sizeof(struct Set) * (strlen(input) + 1));
 
 	fill_item(&start_item, &grammar[0], 0, &sets[0]);
 	sets[0].active = allocate_item(&start_item, &temp_pool);
@@ -178,71 +190,12 @@ void parse(const char *input, struct Rule *grammar, struct Set *sets)
 		scan(&sets[i], &sets[i+1], NULL, grammar, input[i]);
 		complete(&sets[i+1], grammar);
 	}
-}
 
-void printdot(const char *str, int pos)
-{
-	int i;
+	free_pool(&temp_pool);
 
-	for(i=0; i<pos; i++) {
-		printf("%c", str[i]);
-	}
+	tree = create_tree(sets, strlen(input), grammar[0].lhs, NULL);
 
-	printf(" . ");
+	print_sets(input, grammar, sets);
 
-	for(i=pos; i<strlen(str); i++) {
-		printf("%c", str[i]);
-	}
-}
-
-void print(const char *input, struct Rule *grammar, struct Set sets[] )
-{
-	int i;
-	struct Item *cursor;
-
-	for(i=0; i<strlen(input) + 1; i++) {
-		printf("Set %i [", i);
-		printdot(input, i);
-		printf("]:\n");
-
-		printf("Active:\n");
-		for(cursor = sets[i].active; cursor != NULL; cursor = cursor->next) {
-			int j;
-
-			printf("  %c -> ", cursor->rule->lhs);
-			printdot(cursor->rule->rhs, cursor->scanned);
-			printf(" (%i)\n", cursor->start - sets);
-		}
-		printf("Completed:\n");
-		for(cursor = sets[i].completed; cursor != NULL; cursor = cursor->next) {
-			int j;
-
-			printf("  %c -> ", cursor->rule->lhs);
-			printdot(cursor->rule->rhs, cursor->scanned);
-			printf(" (%i)\n", cursor->start - sets);
-		}
-
-		printf("\n");
-	}
-}
-
-int main(int argc, char *argv[])
-{
-	char *input = "n+n+n";
-	struct Rule grammar[] = {
-		{ 'S', "E" },
-		{ 'E', "T" },
-		{ 'E', "E+T" },
-		{ 'T', "F" },
-		{ 'T', "T*F" },
-		{ 'F', "n" },
-		{ 'F', "(E)" },
-		{ 0, 0 }
-	};
-
-	struct Set *sets = allocate(sizeof(struct Set) * (strlen(input) + 1), &keep_pool);
-	memset(sets, 0, sizeof(struct Set) * (strlen(input) + 1));
-
-	parse(input, grammar, sets);
-	print(input, grammar, sets);
+	return tree;
 }

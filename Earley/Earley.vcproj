@@ -151,12 +151,36 @@
 				RelativePath=".\earley.c"
 				>
 			</File>
+			<File
+				RelativePath=".\main.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pool.c"
+				>
+			</File>
+			<File
+				RelativePath=".\print.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
+			<File
+				RelativePath=".\earley.h"
+				>
+			</File>
+			<File
+				RelativePath=".\pool.h"
+				>
+			</File>
+			<File
+				RelativePath=".\print.h"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"
