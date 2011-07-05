@@ -21,12 +21,10 @@ int main(int argc, char *argv[])
 		{ 'F', "(E)" },
 		{ 0, 0 }
 	};*/
-	char *input = "b";
+	char *input = "x";
 	struct Rule grammar[] = {
-		{ 'S', "Ab" },
-		{ 'A', "a" },
-		{ 'A', "B" },
-		{ 'B', "" },
+		{ 'S', "AAx" },
+		{ 'A', "" },
 		{ 0, 0 }
 	};
 	struct Rule *start_rule = &grammar[0];

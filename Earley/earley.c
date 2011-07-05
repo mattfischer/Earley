@@ -79,48 +79,60 @@ static struct EarleyItem *find_item(struct EarleyItem *head, struct EarleyItem *
 	return NULL;
 }
 
+static void add_item(struct EarleySet *set, struct EarleyItem *item, struct EarleyItem *active_tail, struct EarleyItem *completed_tail, struct Allocator *allocator)
+{
+	struct EarleyItem *new_item;
+
+	if(item->scanned == strlen(item->rule->rhs)) {
+		// If item is like X -> aBc. (n), add to set.completed
+		if(find_item(set->completed, item) != NULL) {
+			return;
+		}
+
+		new_item = allocate_item(item, allocator->completed_pool);
+		if(completed_tail != NULL) {
+			add_tail(completed_tail, new_item);
+		} else {
+			add_head(&set->completed, new_item);
+		}
+	} else {
+		// If item is like X -> aB.c (n), add to set.active
+		if(find_item(set->active, item) != NULL) {
+			return;
+		}
+
+		new_item = allocate_item(item, allocator->active_pool);
+		if(active_tail != NULL) {
+			add_tail(active_tail, new_item);
+		} else {
+			add_head(&set->active, new_item);
+		}
+	}
+}
+
 static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet *nullable, struct Allocator *allocator)
 {
 	struct EarleyItem *cursor;
-	struct EarleyItem *new_item;
-	struct EarleyItem potential_item;
+	struct EarleyItem new_item;
 	char token;
 	int i;
 
+	// For each item A -> x.By (n) in set.active...
 	for(cursor = set->active; cursor != NULL; cursor = cursor->next) {
 		token = cursor->rule->rhs[cursor->scanned];
 
-		// For each item A -> x.By (n) in set.active where B is nullable, add A -> xB.y (n) to set.active
-		if(token_set_test(nullable, token) != 0) {
-			fill_item(&potential_item, cursor->rule, cursor->scanned + 1, cursor->start);
-
-			if(find_item(set->active, &potential_item) == NULL) {
-				if(strlen(potential_item.rule->rhs) == potential_item.scanned) {
-					new_item = allocate_item(&potential_item, allocator->completed_pool);
-					add_head(&set->completed, new_item);
-				} else {
-					new_item = allocate_item(&potential_item, allocator->active_pool);
-					add_tail(cursor, new_item);
-				}
+		// ...add all grammar rules B -> .X (idx) to set
+		for(i = 0; grammar[i].lhs != 0; i++) {
+			if(grammar[i].lhs == token) {
+				fill_item(&new_item, &grammar[i], 0, set);
+				add_item(set, &new_item, cursor, NULL, allocator);
 			}
 		}
 
-		// For each item A -> x.By in set.active, add all grammar rules B -> .X (idx) to set.active
-		for(i = 0; grammar[i].lhs != 0; i++) {
-			if(grammar[i].lhs == token) {
-				fill_item(&potential_item, &grammar[i], 0, set);
-				if(find_item(set->active, &potential_item) != NULL) {
-					continue;
-				}
-
-				if(strlen(potential_item.rule->rhs) == 0) {
-					new_item = allocate_item(&potential_item, allocator->completed_pool);
-					add_head(&set->completed, new_item);
-				} else {
-					new_item = allocate_item(&potential_item, allocator->active_pool);
-					add_tail(cursor, new_item);
-				}
-			}
+		// ...if B is nullable, add A -> xB.y (n) to set
+		if(token_set_test(nullable, token) != 0) {
+			fill_item(&new_item, cursor->rule, cursor->scanned + 1, cursor->start);
+			add_item(set, &new_item, cursor, NULL, allocator);
 		}
 	}
 }
@@ -128,40 +140,13 @@ static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet
 static void scan(struct EarleySet *set, struct EarleySet *next_set, struct EarleyItem *completed_tail, char token, struct Allocator *allocator)
 {
 	struct EarleyItem *cursor;
-	struct EarleyItem *new_item;
-	struct EarleyItem potential_item;
+	struct EarleyItem new_item;
 
 	for(cursor = set->active; cursor != NULL; cursor = cursor->next) {
-		// Input = c
-		// (1) For each item A -> x.c (n) in set.active, add A -> xc. (n) to next_set.completed
-		// (2) For each item A -> x.cy (n) in set.active, add A -> xc.y (n) to next_set.active
+		// For each item A -> x.cy (n) in set.active where input = c, add A -> xc.y (n) to next_set
 		if(cursor->rule->rhs[cursor->scanned] == token) {
-			if(cursor->scanned == strlen(cursor->rule->rhs) - 1) {
-				// (1)
-				fill_item(&potential_item, cursor->rule, cursor->scanned + 1, cursor->start);
-
-				if(find_item(next_set->completed, &potential_item) != NULL) {
-					continue;
-				}
-
-				new_item = allocate_item(&potential_item, allocator->completed_pool);
-
-				if(completed_tail != NULL) {
-					add_tail(completed_tail, new_item);
-				} else {
-					add_head(&next_set->completed, new_item);
-				}
-			} else {
-				// (2)
-				fill_item(&potential_item, cursor->rule, cursor->scanned + 1, cursor->start);
-
-				if(find_item(next_set->active, &potential_item) != NULL) {
-					continue;
-				}
-
-				new_item = allocate_item(&potential_item, allocator->active_pool);
-				add_head(&next_set->active, new_item);
-			}
+			fill_item(&new_item, cursor->rule, cursor->scanned + 1, cursor->start);
+			add_item(next_set, &new_item, NULL, completed_tail, allocator);
 		}
 	}
 }
@@ -188,6 +173,7 @@ static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, in
 	int len;
 
 	set = &sets[idx];
+	// Search for an item X -> aBc. (n) in current set, where token = X
 	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
 		if(cursor->rule->lhs == token) {
 			break;
@@ -209,6 +195,8 @@ static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, in
 	tree->rule = rule;
 	tree->children = pool_alloc(pool, sizeof(struct Tree*) * len);
 	for(i=len - 1; i>=0; i--) {
+		// For rule X -> ABC. (n), recursively create each subtree, recording the 
+		// number of tokens consumed by each node
 		tree->children[i] = create_tree(sets, current_idx, rule->rhs[i], &current_idx, pool);
 	}
 
@@ -226,22 +214,30 @@ static void compute_nullable(struct Rule *grammar, struct TokenSet *nullable)
 	int len;
 	int is_nullable;
 	struct Rule *rule;
+	int changed;
 
-	for(i=0; grammar[i].lhs != 0; i++) {
-		rule = &grammar[i];
-		len = strlen(rule->rhs);
-		is_nullable = 1;
-		for(j=0; j<len; j++) {
-			if(token_set_test(nullable, rule->rhs[j]) != 0) {
-				is_nullable = 0;
-				break;
+	do {
+		changed = 0;
+		for(i=0; grammar[i].lhs != 0; i++) {
+			rule = &grammar[i];
+			len = strlen(rule->rhs);
+			is_nullable = 1;
+
+			// A is nullable iff there is a rule producing A for which
+			// all (zero or more) rhs tokens are nullable
+			for(j=0; j<len; j++) {
+				if(token_set_test(nullable, rule->rhs[j]) != 0) {
+					is_nullable = 0;
+					break;
+				}
+			}
+
+			if(is_nullable && token_set_test(nullable, rule->lhs) == 0) {
+				token_set_add(nullable, rule->lhs);
+				changed = 1;
 			}
 		}
-
-		if(is_nullable) {
-			token_set_add(nullable, rule->lhs);
-		}
-	}
+	} while(changed);
 }
 
 struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct Rule *start_rule, struct Pool *active_pool, struct Pool *completed_pool)
@@ -265,7 +261,7 @@ struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct R
 	memset(sets, 0, sizeof(struct EarleySet) * (len + 1));
 
 	fill_item(&start_item, start_rule, 0, &sets[0]);
-	sets[0].active = allocate_item(&start_item, active_pool);
+	add_item(&sets[0], &start_item, NULL, NULL, &allocator);
 
 	for(i=0; i<len; i++) {
 		predict(&sets[i], grammar, &nullable, &allocator);
