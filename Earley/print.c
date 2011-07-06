@@ -37,13 +37,13 @@ void print_sets(const char *input, struct EarleySet sets[])
 		printf("]:\n");
 
 		printf("  Active:\n");
-		for(cursor = sets[i].active; cursor != NULL; cursor = cursor->next) {
+		list_foreach(struct EarleyItem, cursor, list, sets[i].active) {
 			printf("    ");
 			print_item(cursor, sets);
 		}
 
 		printf("  Completed:\n");
-		for(cursor = sets[i].completed; cursor != NULL; cursor = cursor->next) {
+		list_foreach(struct EarleyItem, cursor, list, sets[i].completed) {
 			printf("    ");
 			print_item(cursor, sets);
 		}

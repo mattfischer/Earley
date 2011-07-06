@@ -2,6 +2,7 @@
 #define EARLEY_H
 
 #include "pool.h"
+#include "list.h"
 
 struct Rule {
 	char lhs;
@@ -16,15 +17,15 @@ struct Tree {
 struct EarleySet;
 
 struct EarleyItem {
-	struct EarleyItem *next;
 	struct Rule *rule;
 	int scanned;
 	struct EarleySet *start;
+	struct ListHead list;
 };
 
 struct EarleySet {
-	struct EarleyItem *active;
-	struct EarleyItem *completed;
+	struct ListHead active;
+	struct ListHead completed;
 };
 
 struct TokenSet {

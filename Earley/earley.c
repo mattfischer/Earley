@@ -4,6 +4,7 @@
 
 #include "pool.h"
 #include "print.h"
+#include "list.h"
 
 struct Allocator {
 	struct Pool *active_pool;
@@ -41,7 +42,7 @@ static void fill_item(struct EarleyItem *item, struct Rule *rule, int scanned, s
 	item->rule = rule;
 	item->scanned = scanned;
 	item->start = start;
-	item->next = NULL;
+	list_init(item->list);
 }
 
 static struct EarleyItem *allocate_item(struct EarleyItem *copy, struct Pool *pool)
@@ -54,23 +55,11 @@ static struct EarleyItem *allocate_item(struct EarleyItem *copy, struct Pool *po
 	return new_item;
 }
 
-static void add_tail(struct EarleyItem *tail, struct EarleyItem *new_item)
-{
-	new_item->next = tail->next;
-	tail->next = new_item;
-}
-
-static void add_head(struct EarleyItem **head, struct EarleyItem *new_item)
-{
-	new_item->next = *head;
-	*head = new_item;
-}
-
-static struct EarleyItem *find_item(struct EarleyItem *head, struct EarleyItem *item)
+static struct EarleyItem *find_item(struct ListHead *list, struct EarleyItem *item)
 {
 	struct EarleyItem *cursor;
 
-	for(cursor = head; cursor != NULL; cursor = cursor->next) {
+	list_foreach(struct EarleyItem, cursor, list, *list) {
 		if(cursor->rule == item->rule && cursor->scanned == item->scanned && cursor->start == item->start) {
 			return cursor;
 		}
@@ -79,34 +68,26 @@ static struct EarleyItem *find_item(struct EarleyItem *head, struct EarleyItem *
 	return NULL;
 }
 
-static void add_item(struct EarleySet *set, struct EarleyItem *item, struct EarleyItem *active_tail, struct EarleyItem *completed_tail, struct Allocator *allocator)
+static void add_item(struct EarleySet *set, struct EarleyItem *item, struct Allocator *allocator)
 {
 	struct EarleyItem *new_item;
 
 	if(item->scanned == strlen(item->rule->rhs)) {
 		// If item is like X -> aBc. (n), add to set.completed
-		if(find_item(set->completed, item) != NULL) {
+		if(find_item(&set->completed, item) != NULL) {
 			return;
 		}
 
 		new_item = allocate_item(item, allocator->completed_pool);
-		if(completed_tail != NULL) {
-			add_tail(completed_tail, new_item);
-		} else {
-			add_head(&set->completed, new_item);
-		}
+		list_add_tail(set->completed, new_item->list);
 	} else {
 		// If item is like X -> aB.c (n), add to set.active
-		if(find_item(set->active, item) != NULL) {
+		if(find_item(&set->active, item) != NULL) {
 			return;
 		}
 
 		new_item = allocate_item(item, allocator->active_pool);
-		if(active_tail != NULL) {
-			add_tail(active_tail, new_item);
-		} else {
-			add_head(&set->active, new_item);
-		}
+		list_add_tail(set->active, new_item->list);
 	}
 }
 
@@ -118,35 +99,35 @@ static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet
 	int i;
 
 	// For each item A -> x.By (n) in set.active...
-	for(cursor = set->active; cursor != NULL; cursor = cursor->next) {
+	list_foreach(struct EarleyItem, cursor, list, set->active) {
 		token = cursor->rule->rhs[cursor->scanned];
 
 		// ...add all grammar rules B -> .X (idx) to set
 		for(i = 0; grammar[i].lhs != 0; i++) {
 			if(grammar[i].lhs == token) {
 				fill_item(&new_item, &grammar[i], 0, set);
-				add_item(set, &new_item, cursor, NULL, allocator);
+				add_item(set, &new_item, allocator);
 			}
 		}
 
 		// ...if B is nullable, add A -> xB.y (n) to set
 		if(token_set_test(nullable, token) != 0) {
 			fill_item(&new_item, cursor->rule, cursor->scanned + 1, cursor->start);
-			add_item(set, &new_item, cursor, NULL, allocator);
+			add_item(set, &new_item, allocator);
 		}
 	}
 }
 
-static void scan(struct EarleySet *set, struct EarleySet *next_set, struct EarleyItem *completed_tail, char token, struct Allocator *allocator)
+static void scan(struct EarleySet *set, struct EarleySet *next_set, char token, struct Allocator *allocator)
 {
 	struct EarleyItem *cursor;
 	struct EarleyItem new_item;
 
-	for(cursor = set->active; cursor != NULL; cursor = cursor->next) {
+	list_foreach(struct EarleyItem, cursor, list, set->active) {
 		// For each item A -> x.cy (n) in set.active where input = c, add A -> xc.y (n) to next_set
 		if(cursor->rule->rhs[cursor->scanned] == token) {
 			fill_item(&new_item, cursor->rule, cursor->scanned + 1, cursor->start);
-			add_item(next_set, &new_item, NULL, completed_tail, allocator);
+			add_item(next_set, &new_item, allocator);
 		}
 	}
 }
@@ -155,10 +136,10 @@ static void complete(struct EarleySet *set, struct Allocator *allocator)
 {
 	struct EarleyItem *cursor;
 
-	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
+	list_foreach(struct EarleyItem, cursor, list, set->completed) {
 		// For each item X -> y. (n) in set.completed, scan sets[n].active with
 		// token X, placing the results into set
-		scan(cursor->start, set, cursor, cursor->rule->lhs, allocator);
+		scan(cursor->start, set, cursor->rule->lhs, allocator);
 	}
 }
 				
@@ -166,6 +147,7 @@ static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, in
 {
 	struct EarleySet *set;
 	struct EarleyItem *cursor;
+	struct EarleyItem *item;
 	struct Rule *rule;
 	struct Tree *tree;
 	int i;
@@ -173,14 +155,16 @@ static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, in
 	int len;
 
 	set = &sets[idx];
+	item = NULL;
 	// Search for an item X -> aBc. (n) in current set, where token = X
-	for(cursor = set->completed; cursor != NULL; cursor = cursor->next) {
+	list_foreach(struct EarleyItem, cursor, list, set->completed) {
 		if(cursor->rule->lhs == token) {
+			item = cursor;
 			break;
 		}
 	}
 
-	if(cursor == NULL) {
+	if(item == NULL) {
 		if(start_idx != NULL) {
 			*start_idx = idx - 1;
 		}
@@ -188,7 +172,7 @@ static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, in
 		return NULL;
 	}
 
-	rule = cursor->rule;
+	rule = item->rule;
 	len = strlen(rule->rhs);
 	current_idx = idx;
 	tree = pool_alloc(pool, sizeof(struct Tree));
@@ -258,14 +242,17 @@ struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct R
 
 	len = strlen(input);
 	sets = pool_alloc(completed_pool, sizeof(struct EarleySet) * (len + 1));
-	memset(sets, 0, sizeof(struct EarleySet) * (len + 1));
+	for(i=0; i<len+1; i++) {
+		list_init(sets[i].active);
+		list_init(sets[i].completed);
+	}
 
 	fill_item(&start_item, start_rule, 0, &sets[0]);
-	add_item(&sets[0], &start_item, NULL, NULL, &allocator);
+	add_item(&sets[0], &start_item, &allocator);
 
 	for(i=0; i<len; i++) {
 		predict(&sets[i], grammar, &nullable, &allocator);
-		scan(&sets[i], &sets[i+1], NULL, input[i], &allocator);
+		scan(&sets[i], &sets[i+1], input[i], &allocator);
 		complete(&sets[i+1], &allocator);
 	}
 
