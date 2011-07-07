@@ -156,10 +156,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\pool.c"
-				>
-			</File>
-			<File
 				RelativePath=".\print.c"
 				>
 			</File>
@@ -175,10 +171,6 @@
 			</File>
 			<File
 				RelativePath=".\list.h"
-				>
-			</File>
-			<File
-				RelativePath=".\pool.h"
 				>
 			</File>
 			<File
