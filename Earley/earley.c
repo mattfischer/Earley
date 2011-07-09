@@ -49,13 +49,13 @@ static struct EarleyItem *allocate_item(struct EarleyItem *copy)
 	return new_item;
 }
 
-static struct EarleyItem *find_item(struct ListHead *list, struct EarleyItem *item)
+static struct EarleyItem *find_item(struct ListHead *list, struct EarleyItem *target)
 {
-	struct EarleyItem *cursor;
+	struct EarleyItem *item;
 
-	list_foreach(struct EarleyItem, cursor, list, *list) {
-		if(cursor->rule == item->rule && cursor->scanned == item->scanned && cursor->start == item->start) {
-			return cursor;
+	list_foreach(struct EarleyItem, list, item, *list) {
+		if(item->rule == target->rule && item->scanned == target->scanned && item->start == target->start) {
+			return item;
 		}
 	}
 
@@ -87,14 +87,14 @@ static void add_item(struct EarleySet *set, struct EarleyItem *item)
 
 static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet *nullable)
 {
-	struct EarleyItem *cursor;
+	struct EarleyItem *item;
 	struct EarleyItem new_item;
 	char token;
 	int i;
 
 	// For each item A -> x.By (n) in set.active...
-	list_foreach(struct EarleyItem, cursor, list, set->active) {
-		token = cursor->rule->rhs[cursor->scanned];
+	list_foreach(struct EarleyItem, list, item, set->active) {
+		token = item->rule->rhs[item->scanned];
 
 		// ...add all grammar rules B -> .X (idx) to set
 		for(i = 0; grammar[i].lhs != 0; i++) {
@@ -106,7 +106,7 @@ static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet
 
 		// ...if B is nullable, add A -> xB.y (n) to set
 		if(token_set_test(nullable, token) != 0) {
-			fill_item(&new_item, cursor->rule, cursor->scanned + 1, cursor->start);
+			fill_item(&new_item, item->rule, item->scanned + 1, item->start);
 			add_item(set, &new_item);
 		}
 	}
@@ -114,13 +114,13 @@ static void predict(struct EarleySet *set, struct Rule *grammar, struct TokenSet
 
 static void scan(struct EarleySet *set, struct EarleySet *next_set, char token)
 {
-	struct EarleyItem *cursor;
+	struct EarleyItem *item;
 	struct EarleyItem new_item;
 
-	list_foreach(struct EarleyItem, cursor, list, set->active) {
+	list_foreach(struct EarleyItem, list, item, set->active) {
 		// For each item A -> x.cy (n) in set.active where input = c, add A -> xc.y (n) to next_set
-		if(cursor->rule->rhs[cursor->scanned] == token) {
-			fill_item(&new_item, cursor->rule, cursor->scanned + 1, cursor->start);
+		if(item->rule->rhs[item->scanned] == token) {
+			fill_item(&new_item, item->rule, item->scanned + 1, item->start);
 			add_item(next_set, &new_item);
 		}
 	}
@@ -128,60 +128,111 @@ static void scan(struct EarleySet *set, struct EarleySet *next_set, char token)
 
 static void complete(struct EarleySet *set)
 {
-	struct EarleyItem *cursor;
+	struct EarleyItem *item;
 
-	list_foreach(struct EarleyItem, cursor, list, set->completed) {
+	list_foreach(struct EarleyItem, list, item, set->completed) {
 		// For each item X -> y. (n) in set.completed, scan sets[n].active with
 		// token X, placing the results into set
-		scan(cursor->start, set, cursor->rule->lhs);
+		scan(item->start, set, item->rule->lhs);
 	}
 }
 				
-static struct Tree *create_tree(struct EarleySet sets[], int idx, char token, int *start_idx)
+static void create_tree(struct EarleySet sets[], const char *input, int end, char token, struct Tree *parent, struct ListHead *list)
 {
-	struct EarleySet *set;
-	struct EarleyItem *cursor;
 	struct EarleyItem *item;
-	struct Rule *rule;
+	struct ListHead tree_list;
 	struct Tree *tree;
+	struct Tree *new_tree;
+	struct Tree *child;
+	struct Tree *extra;
+	struct ListHead child_list;
+	struct Rule *rule;
 	int i;
-	int current_idx;
 	int len;
+	int span;
+	int start;
+	int size;
+	int found;
 
-	set = &sets[idx];
-	item = NULL;
+	list_init(tree_list);
 	// Search for an item X -> aBc. (n) in current set, where token = X
-	list_foreach(struct EarleyItem, cursor, list, set->completed) {
-		if(cursor->rule->lhs == token) {
-			item = cursor;
-			break;
+	list_foreach(struct EarleyItem, list, item, sets[end].completed) {
+		if(item->rule->lhs == token) {
+			start = item->start - sets;
+			found = 0;
+			for(tree = parent; tree != NULL; tree = tree->parent) {
+				if(tree->rule == item->rule && tree->start == start && tree->end == end) {
+					found = 1;
+					break;
+				}
+			}
+
+			if(found) {
+				continue;
+			}
+			len = strlen(item->rule->rhs);
+			tree = malloc(sizeof(struct Tree) + sizeof(struct Tree*) * (len - 1));
+			tree->rule = item->rule;
+			tree->start = start;
+			tree->end = end;
+			tree->span = 0;
+			tree->num_children = 0;
+			tree->parent = parent;
+			list_add_tail(tree_list, tree->list);
 		}
 	}
 
-	if(item == NULL) {
-		if(start_idx != NULL) {
-			*start_idx = idx - 1;
+	list_foreach(struct Tree, list, tree, tree_list) {
+		rule = tree->rule;
+		len = strlen(rule->rhs);
+		while(tree->num_children < len) {
+			// For rule X -> ABC. (n), recursively create each subtree, recording the 
+			// number of tokens consumed by each node
+			i = len - tree->num_children - 1;
+
+			if(rule->rhs[i] == input[end - tree->span - 1]) {
+				tree->children[i] = NULL;
+				tree->num_children++;
+				tree->span++;
+				continue;
+			}
+
+			list_init(child_list);
+			create_tree(sets, input, end - tree->span, rule->rhs[i], tree, &child_list);
+
+			child = list_head(struct Tree, list, child_list);
+			if(child == NULL) {
+				break;
+			} else {
+				span = tree->span;
+				tree->span = span + child->span;
+				tree->children[i] = child;
+				tree->num_children++;
+
+				list_remove(child->list);
+
+				list_foreach_ex(struct Tree, list, child, extra, child_list) {
+					size = sizeof(struct Tree) + sizeof(struct Tree*) * (len - 1);
+					new_tree = malloc(size);
+					memcpy(new_tree, tree, size);
+					new_tree->span = span + child->span;
+					new_tree->children[i] = child;
+
+					list_remove(child->list);
+
+					list_add_tail(tree_list, new_tree->list);
+				}
+			}
 		}
-
-		return NULL;
 	}
 
-	rule = item->rule;
-	len = strlen(rule->rhs);
-	current_idx = idx;
-	tree = malloc(sizeof(struct Tree) + sizeof(struct Tree*) * (len - 1));
-	tree->rule = rule;
-	for(i=len - 1; i>=0; i--) {
-		// For rule X -> ABC. (n), recursively create each subtree, recording the 
-		// number of tokens consumed by each node
-		tree->children[i] = create_tree(sets, current_idx, rule->rhs[i], &current_idx);
-	}
+	list_foreach_ex(struct Tree, list, tree, extra, tree_list) {
+		list_remove(tree->list);
 
-	if(start_idx != NULL) {
-		*start_idx = current_idx;
+		if(tree->num_children == strlen(tree->rule->rhs) && tree->span == tree->end - tree->start) {
+			list_add_tail(*list, tree->list);
+		}
 	}
-
-	return tree;
 }
 
 static void compute_nullable(struct Rule *grammar, struct TokenSet *nullable)
@@ -245,11 +296,13 @@ struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct R
 		complete(&sets[i+1]);
 	}
 
+	predict(&sets[len], grammar, &nullable);
+
 	return sets;
 }
 
-struct Tree *earley_tree(struct EarleySet sets[], int num_sets, struct Rule *start_rule)
+void earley_tree(struct EarleySet sets[], int num_sets, const char *input, struct Rule *start_rule, struct ListHead *list)
 {
-	return create_tree(sets, num_sets - 1, start_rule->lhs, NULL);
+	create_tree(sets, input, num_sets - 1, start_rule->lhs, NULL, list);
 }
 
