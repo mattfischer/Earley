@@ -26,9 +26,9 @@ void print_item(struct EarleyItem *item, struct EarleySet sets[])
 
 void print_sets(const char *input, struct EarleySet sets[])
 {
-	int i;
+	int i, j;
 	int len;
-	struct EarleyItem *cursor;
+	struct EarleyItem *item;
 
 	len = strlen(input);
 	for(i=0; i<len + 1; i++) {
@@ -37,15 +37,17 @@ void print_sets(const char *input, struct EarleySet sets[])
 		printf("]:\n");
 
 		printf("  Active:\n");
-		list_foreach(struct EarleyItem, list, cursor, sets[i].active) {
+		for(j=0; j<sets[i].active.size; j++) {
+			item = sets[i].active.data[j];
 			printf("    ");
-			print_item(cursor, sets);
+			print_item(item, sets);
 		}
 
 		printf("  Completed:\n");
-		list_foreach(struct EarleyItem, list, cursor, sets[i].completed) {
+		for(j=0; j<sets[i].completed.size; j++) {
+			item = sets[i].completed.data[j];
 			printf("    ");
-			print_item(cursor, sets);
+			print_item(item, sets);
 		}
 
 		printf("\n");

@@ -1,7 +1,6 @@
 #ifndef EARLEY_H
 #define EARLEY_H
 
-#include "list.h"
 #include "vector.h"
 
 struct Rule {
@@ -15,8 +14,6 @@ struct Tree {
 	int end;
 	int span;
 	int num_children;
-	struct ListHead list;
-	struct ListHead memo;
 	struct Tree *parent;
 	struct Tree *children[1];
 };
@@ -27,12 +24,11 @@ struct EarleyItem {
 	struct Rule *rule;
 	int scanned;
 	struct EarleySet *start;
-	struct ListHead list;
 };
 
 struct EarleySet {
-	struct ListHead active;
-	struct ListHead completed;
+	struct Vector active;
+	struct Vector completed;
 };
 
 struct TokenSet {

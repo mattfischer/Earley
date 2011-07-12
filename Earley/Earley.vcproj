@@ -174,10 +174,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\list.h"
-				>
-			</File>
-			<File
 				RelativePath=".\print.h"
 				>
 			</File>
