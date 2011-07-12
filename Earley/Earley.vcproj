@@ -159,6 +159,10 @@
 				RelativePath=".\print.c"
 				>
 			</File>
+			<File
+				RelativePath=".\vector.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -175,6 +179,10 @@
 			</File>
 			<File
 				RelativePath=".\print.h"
+				>
+			</File>
+			<File
+				RelativePath=".\vector.h"
 				>
 			</File>
 		</Filter>

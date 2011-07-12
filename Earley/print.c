@@ -67,7 +67,7 @@ void print_tree(struct Tree *tree, int indent)
 	int i;
 
 	print_indent(indent);
-	printf("%c: %s\n", tree->rule->lhs, tree->rule->rhs);
+	printf("%c: %s (0x%08x)\n", tree->rule->lhs, tree->rule->rhs, tree);
 	for(i=0; i<strlen(tree->rule->rhs); i++) {
 		if(tree->children[i] != NULL) {
 			print_tree(tree->children[i], indent + 2);

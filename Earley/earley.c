@@ -137,28 +137,35 @@ static void complete(struct EarleySet *set)
 	}
 }
 				
-static void create_tree(struct EarleySet sets[], const char *input, int end, char token, struct Tree *parent, struct ListHead *list)
+static void create_tree(struct EarleySet sets[], const char *input, int parent_start, int end, char token, struct Tree *parent, struct Vector *vector, struct Vector *memo)
 {
 	struct EarleyItem *item;
-	struct ListHead tree_list;
+	struct Vector tree_vector;
 	struct Tree *tree;
 	struct Tree *new_tree;
 	struct Tree *child;
 	struct Tree *extra;
-	struct ListHead child_list;
+	struct Vector child_vector;
 	struct Rule *rule;
-	int i;
+	int i, j;
+	int idx;
 	int len;
 	int span;
-	int start;
 	int size;
+	int start;
 	int found;
 
-	list_init(tree_list);
+	vector_init(&tree_vector);
+	vector_init(&child_vector);
+	i=0;
 	// Search for an item X -> aBc. (n) in current set, where token = X
 	list_foreach(struct EarleyItem, list, item, sets[end].completed) {
 		if(item->rule->lhs == token) {
 			start = item->start - sets;
+			if(start < parent_start) {
+				continue;
+			}
+
 			found = 0;
 			for(tree = parent; tree != NULL; tree = tree->parent) {
 				if(tree->rule == item->rule && tree->start == start && tree->end == end) {
@@ -170,6 +177,20 @@ static void create_tree(struct EarleySet sets[], const char *input, int end, cha
 			if(found) {
 				continue;
 			}
+
+			found = 0;
+			for(j=0; j<memo->size; j++) {
+				tree = memo->data[j];
+				if(tree->rule == item->rule && tree->start == start && tree->end == end) {
+					vector_append(vector, tree);
+					found = 1;
+				}
+			}
+
+			if(found == 1) {
+				continue;
+			}
+
 			len = strlen(item->rule->rhs);
 			tree = malloc(sizeof(struct Tree) + sizeof(struct Tree*) * (len - 1));
 			tree->rule = item->rule;
@@ -178,61 +199,60 @@ static void create_tree(struct EarleySet sets[], const char *input, int end, cha
 			tree->span = 0;
 			tree->num_children = 0;
 			tree->parent = parent;
-			list_add_tail(tree_list, tree->list);
-		}
-	}
+			vector_append(&tree_vector, tree);
 
-	list_foreach(struct Tree, list, tree, tree_list) {
-		rule = tree->rule;
-		len = strlen(rule->rhs);
-		while(tree->num_children < len) {
-			// For rule X -> ABC. (n), recursively create each subtree, recording the 
-			// number of tokens consumed by each node
-			i = len - tree->num_children - 1;
+			for(; i<tree_vector.size; i++) {
+				tree = (struct Tree*)tree_vector.data[i];
+				rule = tree->rule;
+				len = strlen(rule->rhs);
+				while(tree->num_children < len) {
+					// For rule X -> ABC. (n), recursively create each subtree, recording the
+					// number of tokens consumed by each node
+					idx = len - tree->num_children - 1;
 
-			if(rule->rhs[i] == input[end - tree->span - 1]) {
-				tree->children[i] = NULL;
-				tree->num_children++;
-				tree->span++;
-				continue;
-			}
+					if(rule->rhs[idx] == input[end - tree->span - 1]) {
+						tree->children[idx] = NULL;
+						tree->num_children++;
+						tree->span++;
+						continue;
+					}
 
-			list_init(child_list);
-			create_tree(sets, input, end - tree->span, rule->rhs[i], tree, &child_list);
+					create_tree(sets, input, tree->start, end - tree->span, rule->rhs[idx], tree, &child_vector, memo);
 
-			child = list_head(struct Tree, list, child_list);
-			if(child == NULL) {
-				break;
-			} else {
-				span = tree->span;
-				tree->span = span + child->span;
-				tree->children[i] = child;
-				tree->num_children++;
+					if(child_vector.size == 0) {
+						break;
+					} else {
+						child = (struct Tree*)child_vector.data[0];
+						span = tree->span;
+						tree->span = span + child->span;
+						tree->children[idx] = child;
+						tree->num_children++;
 
-				list_remove(child->list);
+						for(j=1; j < child_vector.size; j++) {
+							child = (struct Tree*)child_vector.data[j];
+							size = sizeof(struct Tree) + sizeof(struct Tree*) * (len - 1);
+							new_tree = malloc(size);
+							memcpy(new_tree, tree, size);
+							new_tree->span = span + child->span;
+							new_tree->children[idx] = child;
 
-				list_foreach_ex(struct Tree, list, child, extra, child_list) {
-					size = sizeof(struct Tree) + sizeof(struct Tree*) * (len - 1);
-					new_tree = malloc(size);
-					memcpy(new_tree, tree, size);
-					new_tree->span = span + child->span;
-					new_tree->children[i] = child;
+							vector_append(&tree_vector, new_tree);
+						}
 
-					list_remove(child->list);
+						vector_clear(&child_vector);
+					}
+				}
 
-					list_add_tail(tree_list, new_tree->list);
+				if(tree->num_children == strlen(tree->rule->rhs) && tree->span == tree->end - tree->start) {
+					vector_append(vector, tree);
+					vector_append(memo, tree);
 				}
 			}
 		}
 	}
 
-	list_foreach_ex(struct Tree, list, tree, extra, tree_list) {
-		list_remove(tree->list);
-
-		if(tree->num_children == strlen(tree->rule->rhs) && tree->span == tree->end - tree->start) {
-			list_add_tail(*list, tree->list);
-		}
-	}
+	vector_destroy(&tree_vector);
+	vector_destroy(&child_vector);
 }
 
 static void compute_nullable(struct Rule *grammar, struct TokenSet *nullable)
@@ -301,8 +321,11 @@ struct EarleySet *earley_parse(const char *input, struct Rule *grammar, struct R
 	return sets;
 }
 
-void earley_tree(struct EarleySet sets[], int num_sets, const char *input, struct Rule *start_rule, struct ListHead *list)
+void earley_tree(struct EarleySet sets[], int num_sets, const char *input, struct Rule *start_rule, struct Vector *vector)
 {
-	create_tree(sets, input, num_sets - 1, start_rule->lhs, NULL, list);
+	struct Vector memo;
+
+	vector_init(&memo);
+	create_tree(sets, input, 0, num_sets - 1, start_rule->lhs, NULL, vector, &memo);
 }
 
