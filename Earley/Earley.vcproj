@@ -160,6 +160,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\tree.c"
+				>
+			</File>
+			<File
 				RelativePath=".\vector.c"
 				>
 			</File>
