@@ -170,7 +170,7 @@ static void compute_nullable(struct Rule *grammar, struct TokenSet *nullable)
 			// A is nullable iff there is a rule producing A for which
 			// all (zero or more) rhs tokens are nullable
 			for(j=0; j<len; j++) {
-				if(token_set_test(nullable, rule->rhs[j]) != 0) {
+				if(token_set_test(nullable, rule->rhs[j]) == 0) {
 					is_nullable = 0;
 					break;
 				}
