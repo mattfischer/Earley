@@ -20,6 +20,11 @@ static int find_memo(struct Vector *memo, struct Rule *rule, int start, int end,
 	return found;
 }
 
+static void add_memo(struct Vector *memo, struct Tree *tree)
+{
+	vector_append(memo, tree);
+}
+
 static void create_tree(struct EarleySet sets[], const char *input, int end, char token, struct Tree *parent, struct Vector *vector, struct Vector *memo)
 {
 	struct Vector tree_vector;
@@ -147,9 +152,9 @@ static void create_tree(struct EarleySet sets[], const char *input, int end, cha
 			// If the tree was completely processed, and exactly spanned the number of tokens that
 			// the Earley item reported this rule to span, then accept it as a valid parse tree,
 			// and add it to the output list
-			if(tree->num_children == strlen(tree->rule->rhs) && tree->span == tree->end - tree->start) {
+			if(tree->num_children == len && tree->span == tree->end - tree->start) {
 				vector_append(vector, tree);
-				vector_append(memo, tree);
+				add_memo(memo, tree);
 			}
 		}
 
