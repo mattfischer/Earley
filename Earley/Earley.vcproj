@@ -148,24 +148,60 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\earley.c"
+				RelativePath=".\EarleyItem.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\main.c"
+				RelativePath=".\EarleyParser.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\print.c"
+				RelativePath=".\EarleySet.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\tree.c"
+				RelativePath=".\Main.cpp"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\vector.c"
+				RelativePath=".\Tree.cpp"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
@@ -174,15 +210,23 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\earley.h"
+				RelativePath=".\EarleyItem.hpp"
 				>
 			</File>
 			<File
-				RelativePath=".\print.h"
+				RelativePath=".\EarleyParser.hpp"
 				>
 			</File>
 			<File
-				RelativePath=".\vector.h"
+				RelativePath=".\EarleySet.hpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Rule.hpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Tree.hpp"
 				>
 			</File>
 		</Filter>
