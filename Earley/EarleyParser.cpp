@@ -46,27 +46,13 @@ std::vector<EarleySet> EarleyParser::parse(const std::string &input)
 	return sets;
 }
 
-static bool findMemo(std::vector<Tree*> memo, const Rule *rule, int start, int end, std::vector<Tree*> &vector)
+static std::vector<Tree*> createTrees(const std::vector<EarleySet> &sets, const std::string &input, int end, char token, Tree *parent, std::vector<Tree*> &memo)
 {
-	bool found = false;
-	for(int i=0; i<memo.size(); i++) {
-		Tree *tree = memo[i];
-		if(tree->rule() == rule && tree->start() == start && tree->end() == end) {
-			vector.push_back(tree);
-			found = true;
-		}
-	}
-
-	return found;
-}
-
-static void createTree(const std::vector<EarleySet> &sets, const std::string &input, int end, char token, Tree *parent, std::vector<Tree*> &vector, std::vector<Tree*> &memo)
-{
-	std::vector<Tree*> trees;
-	std::vector<Tree*> children;
+	std::vector<Tree*> ret;
 
 	// Search for an item X -> aBc. (n) in current set, where token = X
 	for(int i=0; i<sets[end].completed().size(); i++) {
+		std::vector<Tree*> trees;
 		const EarleyItem &item = sets[end].completed()[i];
 		if(item.rule()->lhs() != token) {
 			continue;
@@ -94,7 +80,16 @@ static void createTree(const std::vector<EarleySet> &sets, const std::string &in
 		}
 
 		// Check if the parse tree has already been memoized
-		if(findMemo(memo, item.rule(), start, end, vector)) {
+		found = false;
+		for(int j=0; j<memo.size(); j++) {
+			Tree *tree = memo[j];
+			if(tree->rule() == item.rule() && tree->start() == start && tree->end() == end) {
+				ret.push_back(tree);
+				found = true;
+			}
+		}
+
+		if(found) {
 			continue;
 		}
 
@@ -124,7 +119,7 @@ static void createTree(const std::vector<EarleySet> &sets, const std::string &in
 				}
 
 				// Recursively create all parse trees for the child token
-				createTree(sets, input, end - tree->span(), tree->rule()->rhs()[idx], tree, children, memo);
+				std::vector<Tree*> children = createTrees(sets, input, end - tree->span(), tree->rule()->rhs()[idx], tree, memo);
 
 				if(children.size() == 0) {
 					// No valid parsings for the child token.  This rule can't
@@ -148,8 +143,6 @@ static void createTree(const std::vector<EarleySet> &sets, const std::string &in
 						newTree->children()[newTree->children().size() - 1] = child;
 						trees.push_back(newTree);
 					}
-
-					children.clear();
 				}
 			}
 
@@ -157,20 +150,17 @@ static void createTree(const std::vector<EarleySet> &sets, const std::string &in
 			// the Earley item reported this rule to span, then accept it as a valid parse tree,
 			// and add it to the output list
 			if(tree->children().size() == len && tree->span() == tree->end() - tree->start()) {
-				vector.push_back(tree);
+				ret.push_back(tree);
 				memo.push_back(tree);
 			}
 		}
-
-		trees.clear();
 	}
+
+	return ret;
 }
 
 std::vector<Tree*> EarleyParser::parseTrees(const std::vector<EarleySet> &sets, const std::string &input)
 {
 	std::vector<Tree*> memo;
-	std::vector<Tree*> trees;
-	createTree(sets, input, sets.size() - 1, mGrammar[0].lhs(), 0, trees, memo);
-
-	return trees;
+	return createTrees(sets, input, sets.size() - 1, mGrammar[0].lhs(), 0, memo);
 }
