@@ -2,6 +2,67 @@
 
 #include "Tree.hpp"
 
+#include <algorithm>
+
+void EarleyParser::add(EarleySet &set, const EarleyItem &item)
+{
+	if(item.scanned() == item.rule()->rhs().length()) {
+		// If item is like X -> aBc. (n), add to set.completed
+		if(std::find(set.completed().begin(), set.completed().end(), item) == set.completed().end()) {
+			set.completed().push_back(item);
+		}
+	} else {
+		// If item is like X -> aB.c (n), add to set.active
+		if(std::find(set.active().begin(), set.active().end(), item) == set.active().end()) {
+			set.active().push_back(item);
+		}
+	}
+}
+
+void EarleyParser::predict(std::vector<EarleySet> &sets, int position)
+{
+	EarleySet &set = sets[position];
+
+	// For each item A -> x.By (n) in set.active...
+	for(int i=0; i<set.active().size(); i++) {
+		const EarleyItem &item = set.active()[i];
+		char token = item.rule()->rhs()[item.scanned()];
+
+		// ...add all grammar rules B -> .X (idx) to set
+		for(int j=0; j<mGrammar.size(); j++) {
+			if(mGrammar[j].lhs() == token) {
+				add(set, EarleyItem(position, 0, &mGrammar[j]));
+			}
+		}
+
+		// ...if B is nullable, add A -> xB.y (n) to set
+		if(mNullable.find(token) != mNullable.end()) {
+			add(set, EarleyItem(item.start(), item.scanned() + 1, item.rule()));
+		}
+	}	
+}
+
+void EarleyParser::scan(EarleySet &set, EarleySet &target, char token)
+{
+	// For each item A -> x.cy (n) in set.active where input = c, add A -> xc.y (n) to next_set
+	for(int i=0; i<set.active().size(); i++) {
+		const EarleyItem &item = set.active()[i];
+		if(item.rule()->rhs()[item.scanned()] == token) {
+			add(target, EarleyItem(item.start(), item.scanned() + 1, item.rule()));
+		}
+	}
+}
+
+void EarleyParser::complete(std::vector<EarleySet> &sets, EarleySet &set)
+{
+	// For each item X -> y. (n) in set.completed, scan sets[n].active with
+	// token X, placing the results into set
+	for(int i=0; i<set.completed().size(); i++) {
+		const EarleyItem &item = set.completed()[i];
+		scan(sets[item.start()], set, item.rule()->lhs());
+	}
+}
+
 EarleyParser::EarleyParser(const std::vector<Rule> &grammar)
 : mGrammar(grammar)
 {
@@ -34,14 +95,14 @@ std::vector<EarleySet> EarleyParser::parse(const std::string &input)
 {
 	std::vector<EarleySet> sets(input.size() + 1);
 
-	sets[0].add(EarleyItem(0, 0, &mGrammar[0]));
+	add(sets[0], EarleyItem(0, 0, &mGrammar[0]));
 	for(int i=0; i<input.size(); i++) {
-		sets[i].predict(mGrammar, i, mNullable);
-		sets[i].scan(&sets[i+1], input[i]);
-		sets[i+1].complete(sets);
+		predict(sets, i);
+		scan(sets[i], sets[i+1], input[i]);
+		complete(sets, sets[i+1]);
 	}
 
-	sets[sets.size() - 1].predict(mGrammar, sets.size() - 1, mNullable);
+	predict(sets, sets.size() - 1);
 
 	return sets;
 }

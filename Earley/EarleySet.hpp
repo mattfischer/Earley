@@ -9,11 +9,8 @@
 
 class EarleySet {
 public:
-	void add(const EarleyItem &item);
-
-	void predict(const std::vector<Rule> &grammar, int position, const std::set<char> &nullable);
-	void scan(EarleySet *target, char token) const;
-	void complete(const std::vector<EarleySet> &sets);
+	std::vector<EarleyItem> &active() { return mActive; }
+	std::vector<EarleyItem> &completed() { return mCompleted; }
 
 	const std::vector<EarleyItem> &active() const { return mActive; }
 	const std::vector<EarleyItem> &completed() const { return mCompleted; }

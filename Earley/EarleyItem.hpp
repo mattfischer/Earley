@@ -4,6 +4,7 @@
 #include <set>
 
 #include "Rule.hpp"
+#include "Tree.hpp"
 
 class EarleySet;
 
