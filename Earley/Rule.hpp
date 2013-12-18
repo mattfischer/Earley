@@ -3,28 +3,13 @@
 
 #include <string>
 
-class Rule {
-public:
-	Rule(const char &lhs, const std::string &rhs)
-		: mLhs(lhs), mRhs(rhs)
+struct Rule {
+	char lhs;
+	std::string rhs;
+
+	Rule(const char &_lhs, const std::string &_rhs)
+		: lhs(_lhs), rhs(_rhs)
 	{}
-	Rule(const Rule &other)
-		: mLhs(other.mLhs), mRhs(other.mRhs)
-	{}
-
-	Rule &operator=(const Rule &other)
-	{
-		mLhs = other.mLhs;
-		mRhs = other.mRhs;
-		return *this;
-	}
-
-	const char &lhs() const { return mLhs; }
-	const std::string &rhs() const { return mRhs; }
-
-private:
-	char mLhs;
-	std::string mRhs;
 };
 
 #endif

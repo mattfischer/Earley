@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "Rule.hpp"
-#include "EarleyParser.hpp"
+#include "Earley.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -13,10 +13,10 @@ int main(int argc, char *argv[])
 	grammar.push_back(Rule('E', "E+E"));
 	grammar.push_back(Rule('E', "n"));
 
-	EarleyParser parser(grammar);
+	Earley::Parser parser(grammar);
 
 	std::string input = "n+n+n";
-	std::vector<EarleySet> sets = parser.parse(input);
+	std::vector<Earley::Set> sets = parser.parse(input);
 
 	std::cout << "Earley Sets:" << std::endl;
 	for(int i=0; i<sets.size(); i++) {

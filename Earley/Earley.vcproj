@@ -148,15 +148,7 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\EarleyItem.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\EarleyParser.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\EarleySet.cpp"
+				RelativePath=".\Earley.cpp"
 				>
 			</File>
 			<File
@@ -210,15 +202,7 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\EarleyItem.hpp"
-				>
-			</File>
-			<File
-				RelativePath=".\EarleyParser.hpp"
-				>
-			</File>
-			<File
-				RelativePath=".\EarleySet.hpp"
+				RelativePath=".\Earley.hpp"
 				>
 			</File>
 			<File

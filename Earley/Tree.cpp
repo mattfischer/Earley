@@ -6,10 +6,10 @@ static void printTree(std::ostream &o, const Tree *tree, int indent)
 		o << " ";
 	}
 
-	o << tree->rule()->lhs() << ": " << tree->rule()->rhs() << std::endl;
-	for(int i=0; i<tree->children().size(); i++) {
-		if(tree->children()[i]) {
-			printTree(o, tree->children()[i], indent + 2);
+	o << tree->rule->lhs << ": " << tree->rule->rhs << std::endl;
+	for(int i=0; i<tree->children.size(); i++) {
+		if(tree->children[i]) {
+			printTree(o, tree->children[i], indent + 2);
 		}
 	}
 }
