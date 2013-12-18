@@ -43,11 +43,11 @@ public:
 	std::vector<Tree*> parseTrees(const std::vector<Set> &sets, const std::string &input);
 
 private:
-	void add(Set &set, const Item &item);
+	void add(std::vector<Set> &sets, int n, const Item &item);
 
 	void predict(std::vector<Set> &sets, int position);
-	void scan(Set &set, Set &target, char token);
-	void complete(std::vector<Set> &sets, Set &set);
+	void scan(std::vector<Set> &sets, int position, int target, char token);
+	void complete(std::vector<Set> &sets, int position);
 
 	std::vector<Rule> mGrammar;
 	std::set<char> mNullable;

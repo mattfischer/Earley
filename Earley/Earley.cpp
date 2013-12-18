@@ -6,8 +6,10 @@
 
 namespace Earley {
 
-void Parser::add(Set &set, const Item &item)
+void Parser::add(std::vector<Set> &sets, int position, const Item &item)
 {
+	Set &set = sets[position];
+
 	if(item.scanned == item.rule->rhs.length()) {
 		// If item is like X -> aBc. (n), add to set.completed
 		if(std::find(set.completed.begin(), set.completed.end(), item) == set.completed.end()) {
@@ -33,35 +35,39 @@ void Parser::predict(std::vector<Set> &sets, int position)
 		// ...add all grammar rules B -> .X (idx) to set
 		for(int j=0; j<mGrammar.size(); j++) {
 			if(mGrammar[j].lhs == token) {
-				add(set, Item(position, 0, &mGrammar[j]));
+				add(sets, position, Item(position, 0, &mGrammar[j]));
 			}
 		}
 
 		// ...if B is nullable, add A -> xB.y (n) to set
 		if(mNullable.find(token) != mNullable.end()) {
-			add(set, Item(item.start, item.scanned + 1, item.rule));
+			add(sets, position, Item(item.start, item.scanned + 1, item.rule));
 		}
 	}	
 }
 
-void Parser::scan(Set &set, Set &target, char token)
+void Parser::scan(std::vector<Set> &sets, int position, int target, char token)
 {
+	Set &set = sets[position];
+
 	// For each item A -> x.cy (n) in set.active where input = c, add A -> xc.y (n) to next_set
 	for(int i=0; i<set.active.size(); i++) {
 		const Item &item = set.active[i];
 		if(item.rule->rhs[item.scanned] == token) {
-			add(target, Item(item.start, item.scanned + 1, item.rule));
+			add(sets, target, Item(item.start, item.scanned + 1, item.rule));
 		}
 	}
 }
 
-void Parser::complete(std::vector<Set> &sets, Set &set)
+void Parser::complete(std::vector<Set> &sets, int position)
 {
+	Set &set = sets[position];
+
 	// For each item X -> y. (n) in set.completed, scan sets[n].active with
 	// token X, placing the results into set
 	for(int i=0; i<set.completed.size(); i++) {
 		const Item &item = set.completed[i];
-		scan(sets[item.start], set, item.rule->lhs);
+		scan(sets, item.start, position, item.rule->lhs);
 	}
 }
 
@@ -98,11 +104,11 @@ std::vector<Set> Parser::parse(const std::string &input)
 {
 	std::vector<Set> sets(input.size() + 1);
 
-	add(sets[0], Item(0, 0, &mGrammar[0]));
+	add(sets, 0, Item(0, 0, &mGrammar[0]));
 	for(int i=0; i<input.size(); i++) {
 		predict(sets, i);
-		scan(sets[i], sets[i+1], input[i]);
-		complete(sets, sets[i+1]);
+		scan(sets, i, i+1, input[i]);
+		complete(sets, i+1);
 	}
 
 	predict(sets, sets.size() - 1);
