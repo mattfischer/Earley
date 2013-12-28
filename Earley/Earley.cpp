@@ -183,7 +183,7 @@ static std::vector<Tree*> createTrees(const std::vector<Set> &sets, const std::s
 				// input token, then it is a terminal and no child processing
 				// is necessary
 				if(tree->rule->rhs[idx] == input[end - tree->span - 1]) {
-					tree->children.push_back(0);
+					tree->children.insert(tree->children.begin(), 0);
 					tree->span++;
 					continue;
 				}
@@ -201,7 +201,7 @@ static std::vector<Tree*> createTrees(const std::vector<Set> &sets, const std::s
 					Tree *child = children[0];
 					int span = tree->span;
 					tree->span += child->span;
-					tree->children.push_back(child);
+					tree->children.insert(tree->children.begin(), child);
 
 					// If the child query produced more than one parse tree,
 					// we must duplicate the current tree and generate new ones
@@ -210,7 +210,7 @@ static std::vector<Tree*> createTrees(const std::vector<Set> &sets, const std::s
 					for(int k=1; k < children.size(); k++) {
 						child = children[k];
 						Tree *newTree = new Tree(tree->parent, tree->children, tree->rule, tree->start, tree->end, span + child->span);
-						newTree->children[newTree->children.size() - 1] = child;
+						newTree->children[0] = child;
 						trees.push_back(newTree);
 					}
 				}
